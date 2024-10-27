@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Sample</title>
+</head>
+
+<body>
+    <div id="container">
+        <h1>Counter: <span id="counter">0</span></h1>
+        <h1>Next value: <span id="next-counter">1</span></h1>
+
+        <button id="increment">Increment</button>
+
+        <button id="trigger">Trigger</button>
+
+        <form>
+            <input type="radio" name="x" value="1" />
+            <input type="radio" name="x" value="2" />
+            <button id="submit-button" type="submit">Submit</button>
+        </form>
+    </div>
+
+    <script type="text/javascript">
+        class ObserverManager {
+            constructor({ data, refs, watch }) {
+                this.refs = refs;
+                this.watch = {};
+                for (const [key, watcher] of Object.entries(watch)) {
+                    this.watch[key] = (value) => watcher(this, value);
+                };
+                this.state = this.createNestedProxy(data(), this.watch);
+            }
+
+            createNestedProxy(target, watch, path = []) {
+                const self = this;
+                if (typeof target !== "object" || target === null) {
+                    return target;
+                }
+    
+                return new Proxy(target, {
+                    get(target, prop, receiver) {
+                        const newPath = [...path, prop];
+                        const value = Reflect.get(...arguments);
+                        return self.createNestedProxy(value, watch, newPath);
+                    },
+                    set(target, prop, newVal, receiver) {
+                        const newPath = [...path, prop];
+                        const newPathStr = newPath.join(".");
+                        const oldVal = target[prop];
+                        if (oldVal  === newVal) return;
+                        if (newPathStr in watch) {
+                            watch[newPathStr](newVal);
+                        }
+                        return Reflect.set(...arguments)
+                    }
+                })
+            }
+        }
+
+
+        const wrapperElement = document.querySelector("#container");
+        const nextCounterElement = wrapperElement.querySelector("#next-counter")
+        const counterElement = wrapperElement.querySelector("#counter");
+        const incrementElement = wrapperElement.querySelector("button#increment");
+        const data = function() {
+            return {
+                nested: {
+                        counter: 0,
+                        nextCounter: 1
+                    }
+            }
+        }
+        const watch = {
+            "nested.counter": (scope, value) => {
+                scope.refs.counterElement.innerText = value;
+                scope.state.nested.nextCounter = value + 1;
+            },
+            "nested.nextCounter": (scope, value) => {
+                scope.refs.nextCounterElement.innerText = value;
+            }
+        };
+        const wrapper = new ObserverManager({ 
+            data, 
+            refs: { nextCounterElement, counterElement },
+            watch
+        })
+        incrementElement.addEventListener("click", () => {
+            wrapper.state.nested.counter += 1;
+        })
+
+    </script>
+</body>
+
+</html>
